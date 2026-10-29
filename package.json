@@ -1,0 +1,34 @@
+{
+  "name": "blecommands",
+  "version": "1.0.0",
+  "description": "Simple text-based command/response protocol over BLE.",
+  "keywords": [
+    "ble",
+    "blecommands",
+    "bluetooth",
+    "bluetoothle",
+    "web-bluetooth",
+    "webbluetooth",
+    "browser",
+    "arduino"
+  ],
+  "homepage": "https://github.com/andrey-val-rodin/BleCommands.JS#readme",
+  "bugs": {
+    "url": "https://github.com/andrey-val-rodin/BleCommands.JS/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andrey-val-rodin/BleCommands.JS.git"
+  },
+  "files": [
+    "index.js",
+    "README.md"
+  ],
+  "license": "MIT",
+  "author": "Andrey Rodin",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  }
+}

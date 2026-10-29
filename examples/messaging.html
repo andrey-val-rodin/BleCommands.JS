@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BLE Messaging</title>
+    <style>
+        :root {
+            --accent: #4a6fa5;
+            --accent-active: #3a5a8a;
+            --bg: #ffffff;
+            --text: #1e1e1e;
+            --border: #c8c8c8;
+            --log-bg: #111111;
+            --log-fg: #33ff66;
+            --error: #c0392b;
+        }
+        * {
+            font-size: 1.1rem;
+            font-family: Arial, sans-serif;
+            box-sizing: border-box;
+        }
+        body {
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            background: var(--bg);
+            color: var(--text);
+        }
+        .container {
+            position: relative;
+            overflow: hidden;
+            height: 100vh;
+            flex: 1;
+            margin: 8px;
+        }
+        .page {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            transition: transform 0.5s ease-in-out;
+            background: var(--bg);
+        }
+        .pageConnection {
+            transform: translateX(0);
+            z-index: 1;
+        }
+        .pageMessaging {
+            transform: translateX(100%);
+            z-index: 2;
+        }
+        .page.active {
+            transform: translateX(0);
+            z-index: 2;
+        }
+
+        /* Unified button style */
+        button {
+            font-size: 1rem;
+            height: 2.2rem;
+            min-width: 6rem;
+            padding: 0 1rem;
+            color: #ffffff;
+            background: var(--accent);
+            border: 1px solid var(--accent);
+            border-radius: 0.4rem;
+            cursor: pointer;
+            transition: background 0.15s ease;
+        }
+        button:hover:not(:disabled) { background: var(--accent-active); }
+        button:active:not(:disabled) { background: var(--accent-active); border-color: #2c4568; }
+        button:disabled { background: #9aa8bb; border-color: #9aa8bb; cursor: default; }
+        button.secondary { background: #ffffff; color: var(--accent); }
+        button.secondary:hover:not(:disabled) { background: #eef2f7; }
+
+        input[type="text"], select {
+            font-size: 1rem;
+            height: 2.2rem;
+            padding: 0 0.5rem;
+            border: 1px solid var(--border);
+            border-radius: 0.4rem;
+            background: #ffffff;
+            color: var(--text);
+        }
+
+        .center { margin: auto; }
+        .width { width: 100%; max-width: 40rem; }
+        .hidden { display: none; }
+        .bold { font-weight: bold; }
+
+        /* Ribbon */
+        .ribbon {
+            width: 100%;
+            height: 2.4rem;
+            padding-top: 0.6rem;
+            background: var(--accent);
+            color: #ffffff;
+            text-align: center;
+        }
+        .ribbon-text { font-size: 1.2rem; }
+        .ribbon-button {
+            position: absolute;
+            left: 0;
+            top: 0;
+            height: 2.4rem;
+            width: 2.4rem;
+            min-width: 0;
+            padding: 0;
+            border-radius: 0;
+            background: var(--accent);
+            border: none;
+            font-size: 1.2rem;
+        }
+
+        /* MainWindow.xaml layout */
+        .messaging-body {
+            margin: 8px;
+            display: flex;
+            flex-direction: column;
+            height: calc(100% - 2.6rem);
+        }
+        .row-command {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            height: 3rem;
+            margin-bottom: 0.5rem;
+        }
+        .row-command label { font-size: 1.1rem; }
+        .row-command select { width: 10rem; }
+        .row-response {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            height: 3rem;
+            margin-bottom: 0.5rem;
+        }
+        .response-line {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            flex: 1;
+            overflow: hidden;
+        }
+        .response-value {
+            font-size: 1.1rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .log {
+            flex: 1;
+            background: var(--log-bg);
+            color: var(--log-fg);
+            font-family: Consolas, monospace;
+            font-size: 0.95rem;
+            padding: 0.5rem;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            border: 1px solid #000000;
+            border-radius: 0.4rem;
+            min-height: 8rem;
+        }
+
+        /* Error modal (Popup) */
+        .overlay {
+            position: fixed;
+            inset: 0;
+            background: #BB000000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+        }
+        .overlay.visible { display: flex; }
+        .dialog {
+            background: #ffffff;
+            border-radius: 10px;
+            padding: 20px;
+            width: 400px;
+            max-width: calc(100vw - 40px);
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
+        }
+        .dialog-text {
+            font-size: 1.1rem;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+        .error-text { color: var(--error); font-size: 0.95rem; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- ===== Page 1: Connection ===== -->
+        <div class="page pageConnection active">
+            <h1>Connection</h1>
+            <p>
+                <button class="width" type="button" id="CONNECT_BTN">Connect…</button>
+            </p>
+            <p>
+                <progress class="hidden width" max="100" id="PROGRESS"></progress>
+            </p>
+            <p class="width">
+                <label class="hidden error-text" id="ERR"></label>
+            </p>
+        </div>
+
+        <!-- ===== Page 2: Messaging (MainWindow.xaml) ===== -->
+        <div class="page pageMessaging">
+            <div class="ribbon">
+                <button class="ribbon-button" type="button" title="Disconnect" id="DISCONNECT_BTN">&#8592;</button>
+                <label class="ribbon-text" id="RIBBON_TEXT">BLE Messaging</label>
+            </div>
+
+            <div class="messaging-body">
+                <!-- Row 0: Command + Send -->
+                <div class="row-command">
+                    <label for="COMMAND">Command:</label>
+                    <select id="COMMAND"></select>
+                    <button type="button" id="BTN_SEND">Send</button>
+                </div>
+
+                <!-- Row 1: Response + Clear -->
+                <div class="row-response">
+                    <div class="response-line">
+                        <label>Response:</label>
+                        <span class="response-value" id="RESPONSE"></span>
+                    </div>
+                    <button class="secondary" type="button" id="BTN_CLEAR">Clear</button>
+                </div>
+
+                <!-- Row 2: Log -->
+                <div class="log" id="LOG"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Error modal -->
+    <div class="overlay" id="OVERLAY">
+        <div class="dialog">
+            <div class="dialog-text" id="DIALOG_TEXT"></div>
+            <button type="button" id="DIALOG_CLOSE">Close</button>
+        </div>
+    </div>
+
+<script type="module">
+    import {
+        requestDevice,
+        createTransport,
+        isWebBluetoothSupported
+    } from '../index.js';
+
+    const Element = (id) => document.getElementById(id);
+    const Show = (el, show) => { el.classList.toggle('hidden', !show); };
+    const Enable = (el, enable) => { el.disabled = !enable; };
+
+    const pageConnection = document.querySelector('.pageConnection');
+    const pageMessaging = document.querySelector('.pageMessaging');
+
+    function gotoConnectionPage() {
+        pageMessaging.classList.remove('active');
+        pageConnection.classList.add('active');
+    }
+    function gotoMessagingPage() {
+        pageConnection.classList.remove('active');
+        pageMessaging.classList.add('active');
+    }
+
+    // Error dialog (used both on page 1 and on page 2)
+    function showError(message) {
+        Element('DIALOG_TEXT').textContent = message;
+        Element('OVERLAY').classList.add('visible');
+    }
+    Element('DIALOG_CLOSE').addEventListener('click', () => {
+        Element('OVERLAY').classList.remove('visible');
+    });
+
+    // Page 1: connection
+    let transport = null;
+
+    function showPageError(message) {
+        const el = Element('ERR');
+        el.textContent = message;
+        Show(el, true);
+    }
+    function clearPageError() {
+        const el = Element('ERR');
+        el.textContent = '';
+        Show(el, false);
+    }
+
+    if (!isWebBluetoothSupported()) {
+        showPageError('This browser does not support Web Bluetooth. Use Chrome, Edge, Opera or Samsung Internet.');
+        Enable(Element('CONNECT_BTN'), false);
+    }
+
+    Element('CONNECT_BTN').addEventListener('click', async () => {
+        clearPageError();
+        Enable(Element('CONNECT_BTN'), false);
+        Show(Element('PROGRESS'), true);
+        Element('PROGRESS').value = 0;
+
+        try {
+            // requestDevice must be the FIRST await inside the click handler
+            const device = await requestDevice('BLECommands Messaging Example');
+            Element('PROGRESS').value = 30;
+
+            transport = await createTransport(device);
+            Element('PROGRESS').value = 100;
+
+            transport.addEventListener('disconnected', () => {
+                transport.disconnect();
+                transport = null;
+                gotoConnectionPage();
+                showPageError('The device was disconnected.');
+            });
+
+            // TODO: subscribe to 'response' / 'token' events here
+
+            gotoMessagingPage();
+        } catch (err) {
+            showPageError(err.message || String(err));
+        } finally {
+            Show(Element('PROGRESS'), false);
+            Enable(Element('CONNECT_BTN'), true);
+        }
+    });
+
+    // Page 2: placeholder handlers (no real functionality yet)
+    Element('DISCONNECT_BTN').addEventListener('click', () => {
+        transport?.disconnect();
+        transport = null;
+        gotoConnectionPage();
+    });
+
+    Element('BTN_SEND').addEventListener('click', () => {
+        // TODO: send selected command via transport
+    });
+
+    Element('BTN_CLEAR').addEventListener('click', () => {
+        Element('LOG').textContent = '';
+        Element('RESPONSE').textContent = '';
+    });
+
+    // Expose for quick manual checks in console
+    window.__ble = { showError, getTransport: () => transport };
+</script>
+</body>
+</html>
