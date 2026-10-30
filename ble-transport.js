@@ -6,9 +6,7 @@ import { TokenAggregator } from './token-aggregator.js';
  *
  * Emits the following events:
  * - `disconnected` — fired when the device disconnects.
- * - `listeningtimeoutelapsed` - fired when no listening token is received
- * within the configured interval.
- * - `listeningtokenreceived` - fired when a listening token is received from the bluetooth device.
+ * - `messagereceived` - fired when a message is received from the bluetooth device.
  *
  * A single instance represents a single connection. Create a new instance to reconnect.
  */
@@ -95,6 +93,7 @@ export class BleTransport extends EventTarget {
         this.commandCharacteristic = null;
         this.responseCharacteristic = null;
         this.listeningCharacteristic = null;
+        this.#pendingCommand = false;
     }
 
     /**
@@ -115,15 +114,6 @@ export class BleTransport extends EventTarget {
         const aggregator = this.responseCharacteristic.tokenAggregator;
 
         return new Promise((resolve, reject) => {
-
-            // cleanup is idempotent: removeEventListener/clearTimeout/resolve
-            // are no-ops when called again
-            const cleanup = () => {
-                aggregator.removeEventListener('tokenreceived', onResponse);
-                clearTimeout(timer);
-                this.#pendingCommand = false;
-            };
-
             const onResponse = (e) => {
                 cleanup();
                 resolve(e.detail);
@@ -133,6 +123,14 @@ export class BleTransport extends EventTarget {
                 cleanup();
                 resolve(null);
             }, timeoutMs);
+
+            // cleanup is idempotent: removeEventListener/clearTimeout/resolve
+            // are no-ops when called again
+            const cleanup = () => {
+                aggregator.removeEventListener('tokenreceived', onResponse);
+                clearTimeout(timer);
+                this.#pendingCommand = false;
+            };
 
             aggregator.addEventListener('tokenreceived', onResponse);
 
@@ -168,9 +166,6 @@ export class BleTransport extends EventTarget {
         this.listeningCharacteristic.tokenAggregator = new TokenAggregator(this.tokenDelimiter);
 
         // Re-dispatch aggregated tokens as transport-level events.
-        this.responseCharacteristic.tokenAggregator.addEventListener('tokenreceived', (e) => {
-            this.dispatchEvent(new CustomEvent('responsereceived', { detail: { text: e.detail } }));
-        });
         this.listeningCharacteristic.tokenAggregator.addEventListener('tokenreceived', (e) => {
             this.dispatchEvent(new CustomEvent('messagereceived', { detail: { text: e.detail } }));
         });

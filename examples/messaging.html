@@ -49,6 +49,7 @@
             height: 100%;
             transition: transform 0.5s ease-in-out;
             background: var(--bg);
+            overflow-y: auto;
         }
 
         .pageConnection {
@@ -222,42 +223,25 @@
             min-height: 8rem;
         }
 
-        /* Error modal (Popup) */
-        .overlay {
-            position: fixed;
-            inset: 0;
-            background: #BB000000;
-            display: none;
-            align-items: center;
-            justify-content: center;
-            z-index: 10;
+        /* Connection page help text */
+        .intro {
+            margin: 0 0 1rem 0;
+            line-height: 1.5;
         }
 
-        .overlay.visible {
-            display: flex;
-        }
-
-        .dialog {
-            background: #ffffff;
-            border-radius: 10px;
-            padding: 20px;
-            width: 400px;
-            max-width: calc(100vw - 40px);
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
-            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
-        }
-
-        .dialog-text {
-            font-size: 1.1rem;
-            white-space: pre-wrap;
-            word-break: break-word;
+        .intro a {
+            color: var(--accent);
+            word-break: break-all;
         }
 
         .error-text {
             color: var(--error);
             font-size: 0.95rem;
+        }
+
+        html.wait,
+        html.wait * {
+            cursor: wait !important;
         }
     </style>
 </head>
@@ -267,11 +251,18 @@
         <!-- ===== Page 1: Connection ===== -->
         <div class="page pageConnection active">
             <h1>Connection</h1>
+            <p class="width intro">
+                This is a demo application for the
+                <a href="https://github.com/andrey-val-rodin/BleCommands.Arduino" target="_blank"
+                    rel="noopener noreferrer">BleCommands.Arduino</a>
+                library's Messaging example. The Bluetooth device you connect to must be running
+                the Messaging example firmware from that library.
+            </p>
             <p>
                 <button class="width" type="button" id="CONNECT_BTN">Connect…</button>
             </p>
             <p class="width">
-                <label class="hidden error-text" id="ERR"></label>
+                <span class="hidden error-text" id="ERR"></span>
             </p>
         </div>
 
@@ -279,7 +270,7 @@
         <div class="page pageMessaging">
             <div class="ribbon">
                 <button class="ribbon-button" type="button" title="Disconnect" id="DISCONNECT_BTN">&#8592;</button>
-                <label class="ribbon-text" id="RIBBON_TEXT">BLE Messaging</label>
+                <span class="ribbon-text" id="RIBBON_TEXT">BLE Messaging</span>
             </div>
 
             <div class="messaging-body">
@@ -296,7 +287,7 @@
                 <!-- Row 1: Response + Clear -->
                 <div class="row-response">
                     <div class="response-line">
-                        <label>Response:</label>
+                        <span>Response:</span>
                         <span class="response-value" id="RESPONSE"></span>
                     </div>
                     <button class="secondary" type="button" id="BTN_CLEAR">Clear</button>
@@ -305,14 +296,6 @@
                 <!-- Row 2: Log -->
                 <div class="log" id="LOG"></div>
             </div>
-        </div>
-    </div>
-
-    <!-- Error modal -->
-    <div class="overlay" id="OVERLAY">
-        <div class="dialog">
-            <div class="dialog-text" id="DIALOG_TEXT"></div>
-            <button type="button" id="DIALOG_CLOSE">Close</button>
         </div>
     </div>
 
@@ -330,92 +313,118 @@
         const pageConnection = document.querySelector('.pageConnection');
         const pageMessaging = document.querySelector('.pageMessaging');
 
-        function gotoConnectionPage() {
-            pageMessaging.classList.remove('active');
-            pageConnection.classList.add('active');
-        }
-        function gotoMessagingPage() {
-            pageConnection.classList.remove('active');
-            pageMessaging.classList.add('active');
-        }
-
-        // Error dialog (used both on page 1 and on page 2)
-        function showError(message) {
-            Element('DIALOG_TEXT').textContent = message;
-            Element('OVERLAY').classList.add('visible');
-        }
-        Element('DIALOG_CLOSE').addEventListener('click', () => {
-            Element('OVERLAY').classList.remove('visible');
-        });
-
         // Page 1: connection
         let transport = null;
 
-        function showPageError(message) {
+        const onTransportMessage = (e) => {
+            const text = e.detail?.text ?? '';
+            const log = Element('LOG');
+            log.textContent += text + '\n';
+            log.scrollTop = log.scrollHeight;
+        };
+
+        function showError(message) {
             const el = Element('ERR');
             el.textContent = message;
             Show(el, true);
         }
-        function clearPageError() {
+        function clearError() {
             const el = Element('ERR');
             el.textContent = '';
             Show(el, false);
         }
 
+        function gotoConnectionPage(errorMessage) {
+            if (transport) {
+                transport.removeEventListener('messagereceived', onTransportMessage);
+                try { transport.disconnect(); } catch (e) { /* ignore */ }
+                transport = null;
+            }
+
+            Element('LOG').textContent = '';
+            Element('RESPONSE').textContent = '';
+
+            pageMessaging.classList.remove('active');
+            pageConnection.classList.add('active');
+
+            if (errorMessage) {
+                showError(errorMessage);
+            }
+        }
+
+        function gotoMessagingPage() {
+            pageConnection.classList.remove('active');
+            pageMessaging.classList.add('active');
+        }
+
         if (!isWebBluetoothSupported()) {
-            showPageError('This browser does not support Web Bluetooth. Use Chrome, Edge, Opera or Samsung Internet.');
+            showError('This browser does not support Web Bluetooth. Use Chrome, Edge, Opera or Samsung Internet.');
             Enable(Element('CONNECT_BTN'), false);
         }
 
         Element('CONNECT_BTN').addEventListener('click', async () => {
-            clearPageError();
+            clearError();
             Enable(Element('CONNECT_BTN'), false);
 
             try {
                 // requestDevice must be the FIRST await inside the click handler
                 const device = await requestDevice('BLECommands Messaging Example');
-                document.body.style.cursor = 'wait';
+                document.documentElement.classList.add('wait');
                 transport = await createTransport(device);
-                document.body.style.cursor = 'default';
+                document.documentElement.classList.remove('wait');
 
                 transport.addEventListener('disconnected', () => {
-                    transport.disconnect();
-                    transport = null;
-                    gotoConnectionPage();
-                    showPageError('The device was disconnected.');
+                    gotoConnectionPage('The device was disconnected.');
                 });
 
-                // TODO: subscribe to 'response' / 'token' events here
+                // Подписка на сообщения от устройства
+                transport.addEventListener('messagereceived', onTransportMessage);
 
                 gotoMessagingPage();
             } catch (err) {
-                showPageError(err.message || String(err));
+                document.documentElement.classList.remove('wait');
+                gotoConnectionPage(err.message || String(err));
             } finally {
                 Enable(Element('CONNECT_BTN'), true);
             }
         });
 
-        // Page 2: placeholder handlers (no real functionality yet)
+        // Page 2
         Element('DISCONNECT_BTN').addEventListener('click', () => {
-            transport?.disconnect();
-            transport = null;
             gotoConnectionPage();
         });
 
         Element('BTN_SEND').addEventListener('click', async () => {
+            if (!transport) {
+                gotoConnectionPage('Not connected.');
+                return;
+            }
+
             const command = Element('COMMAND').value;
             let timeWas = new Date();
-            const response = await transport.sendCommand(command);
-            console.log('Command', command, 'resolved after', new Date() - timeWas, 'ms');
+            try {
+                const response = await transport.sendCommand(command);
+                console.log('Command', command, 'response:', response);
+                console.log('resolved after', new Date() - timeWas, 'ms');
+
+                Element('RESPONSE').innerText = response;
+                if (response == "OK") {
+                    Element('RESPONSE').style.color = 'black';
+                } else {
+                    if (!response) {
+                        Element('RESPONSE').innerText = '<No response>';
+                    }
+                    Element('RESPONSE').style.color = 'red';
+                }
+            } catch (err) {
+                gotoConnectionPage(err.message || String(err));
+            }
         });
 
         Element('BTN_CLEAR').addEventListener('click', () => {
             Element('LOG').textContent = '';
             Element('RESPONSE').textContent = '';
         });
-
-        // Expose for quick manual checks in console
-        window.__ble = { showError, getTransport: () => transport };
     </script>
 </body>
 
