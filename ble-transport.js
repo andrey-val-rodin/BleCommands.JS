@@ -26,6 +26,7 @@ export class BleTransport extends EventTarget {
     #controller = new AbortController();
     #encoder = new TextEncoder();
     #decoder = new TextDecoder();
+    #pendingCommand = false;
 
     /**
      * @param {BluetoothDevice} device The device obtained from `navigator.bluetooth.requestDevice()`.
@@ -94,6 +95,54 @@ export class BleTransport extends EventTarget {
         this.commandCharacteristic = null;
         this.responseCharacteristic = null;
         this.listeningCharacteristic = null;
+    }
+
+    /**
+     * Sends a command and waits for a response token.
+     * @param {string} command
+     * @param {number} [timeoutMs=1000]
+     * @returns {Promise<string|null>} The response token, or null on timeout.
+     */
+    async sendCommand(command, timeoutMs = 1000) {
+        if (!this.commandCharacteristic) {
+            throw new Error('Not connected');
+        }
+        if (this.#pendingCommand) {
+            throw new Error('The command is already being sent');
+        }
+
+        this.#pendingCommand = true;
+        const aggregator = this.responseCharacteristic.tokenAggregator;
+
+        return new Promise((resolve, reject) => {
+
+            // cleanup is idempotent: removeEventListener/clearTimeout/resolve
+            // are no-ops when called again
+            const cleanup = () => {
+                aggregator.removeEventListener('tokenreceived', onResponse);
+                clearTimeout(timer);
+                this.#pendingCommand = false;
+            };
+
+            const onResponse = (e) => {
+                cleanup();
+                resolve(e.detail);
+            };
+
+            let timer = setTimeout(() => {
+                cleanup();
+                resolve(null);
+            }, timeoutMs);
+
+            aggregator.addEventListener('tokenreceived', onResponse);
+
+            this.commandCharacteristic
+                .writeValueWithoutResponse(this.#encoder.encode(command))
+                .catch((err) => {
+                    cleanup();
+                    reject(err);
+                });
+        });
     }
 
     /**
