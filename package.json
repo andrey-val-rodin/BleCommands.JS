@@ -1,7 +1,7 @@
 {
   "name": "blecommands",
   "version": "1.0.0",
-  "description": "Simple text-based command/response protocol over BLE.",
+  "description": "JavaScript client for the BleCommands text protocol over Web Bluetooth.",
   "keywords": [
     "ble",
     "blecommands",
