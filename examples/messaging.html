@@ -407,13 +407,10 @@
                 console.log('Command', command, 'response:', response);
                 console.log('resolved after', new Date() - timeWas, 'ms');
 
-                Element('RESPONSE').innerText = response;
+                Element('RESPONSE').textContent = response ?? '<No response>'
                 if (response == "OK") {
                     Element('RESPONSE').style.color = 'black';
                 } else {
-                    if (!response) {
-                        Element('RESPONSE').innerText = '<No response>';
-                    }
                     Element('RESPONSE').style.color = 'red';
                 }
             } catch (err) {

@@ -22,12 +22,18 @@
   },
   "files": [
     "index.js",
+    "ble-transport.js",
+    "token-aggregator.js",
+    "LICENSE",
     "README.md"
   ],
   "license": "MIT",
   "author": "Andrey Rodin",
   "type": "module",
   "main": "index.js",
+  "exports": {
+    ".": "./index.js"
+  },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   }

@@ -24,7 +24,8 @@ export class BleTransport extends EventTarget {
     #controller = new AbortController();
     #encoder = new TextEncoder();
     #decoder = new TextDecoder();
-    #pendingCommand = false;
+    /** @type {((reason?: any) => void) | null} Rejects the in-flight command on disconnect. */
+    #pendingReject = null;
 
     /**
      * @param {BluetoothDevice} device The device obtained from `navigator.bluetooth.requestDevice()`.
@@ -74,8 +75,6 @@ export class BleTransport extends EventTarget {
             this.disconnect();
             throw err;
         }
-
-        this.dispatchEvent(new CustomEvent('connected'));
     }
 
     /**
@@ -83,9 +82,16 @@ export class BleTransport extends EventTarget {
      * Safe to call multiple times.
      */
     disconnect() {
-        this.#controller.abort();
+        this.#controller?.abort();
         if (this.server?.connected) {
             this.server.disconnect();
+        }
+
+        // Reject an in-flight command immediately instead of waiting for the timeout.
+        if (this.#pendingReject) {
+            const reject = this.#pendingReject;
+            this.#pendingReject = null;
+            reject(new Error('Disconnected'));
         }
 
         this.#controller = null;
@@ -93,7 +99,6 @@ export class BleTransport extends EventTarget {
         this.commandCharacteristic = null;
         this.responseCharacteristic = null;
         this.listeningCharacteristic = null;
-        this.#pendingCommand = false;
     }
 
     /**
@@ -101,16 +106,17 @@ export class BleTransport extends EventTarget {
      * @param {string} command
      * @param {number} [timeoutMs=1000]
      * @returns {Promise<string|null>} The response token, or null on timeout.
+     * @throws {Error} If not connected, if another command is in flight,
+     *   if the write fails, or if the device disconnects while waiting.
      */
     async sendCommand(command, timeoutMs = 1000) {
         if (!this.commandCharacteristic) {
             throw new Error('Not connected');
         }
-        if (this.#pendingCommand) {
+        if (this.#pendingReject) {
             throw new Error('The command is already being sent');
         }
 
-        this.#pendingCommand = true;
         const aggregator = this.responseCharacteristic.tokenAggregator;
 
         return new Promise((resolve, reject) => {
@@ -119,7 +125,7 @@ export class BleTransport extends EventTarget {
                 resolve(e.detail);
             };
 
-            let timer = setTimeout(() => {
+            const timer = setTimeout(() => {
                 cleanup();
                 resolve(null);
             }, timeoutMs);
@@ -129,9 +135,12 @@ export class BleTransport extends EventTarget {
             const cleanup = () => {
                 aggregator.removeEventListener('tokenreceived', onResponse);
                 clearTimeout(timer);
-                this.#pendingCommand = false;
+                if (this.#pendingReject === reject) {
+                    this.#pendingReject = null;
+                }
             };
 
+            this.#pendingReject = reject;
             aggregator.addEventListener('tokenreceived', onResponse);
 
             this.commandCharacteristic
