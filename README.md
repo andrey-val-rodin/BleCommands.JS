@@ -1,5 +1,7 @@
 # BleCommands.JS
 
+[![Node.js CI](https://github.com/andrey-val-rodin/BleCommands.JS/actions/workflows/node.js.yml/badge.svg)](https://github.com/andrey-val-rodin/BleCommands.JS/actions/workflows/node.js.yml)
+
 **BleCommands.JS** is a lightweight JavaScript library for exchanging text commands with BLE devices over [Web Bluetooth](https://developer.mozilla.org/en-US/docs/Web/API/Web_Bluetooth_API). It is the browser counterpart of the [.NET BleCommands](https://github.com/andrey-val-rodin/BleCommands) library and works out of the box with firmware built on the [Arduino companion library](https://github.com/andrey-val-rodin/BleCommands.Arduino).
 
 Write a web page, connect to your device, and start sending commands — no native app required.
