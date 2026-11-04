@@ -61,7 +61,10 @@ export class BleTransport extends EventTarget {
 
         this.device.addEventListener(
             'gattserverdisconnected',
-            () => this.dispatchEvent(new CustomEvent('disconnected')),
+            () => {
+                this.#rejectCommand();
+                this.dispatchEvent(new CustomEvent('disconnected'));
+            },
             { signal: this.#controller.signal }
         );
 
@@ -87,12 +90,7 @@ export class BleTransport extends EventTarget {
             this.server.disconnect();
         }
 
-        // Reject an in-flight command immediately instead of waiting for the timeout.
-        if (this.#pendingReject) {
-            const reject = this.#pendingReject;
-            this.#pendingReject = null;
-            reject(new Error('Disconnected'));
-        }
+        this.#rejectCommand();
 
         this.#controller = null;
         this.server = null;
@@ -200,5 +198,16 @@ export class BleTransport extends EventTarget {
         await this.listeningCharacteristic.startNotifications();
 
         return true;
+    }
+
+    /**
+     * Rejects an in-flight command immediately instead of waiting for the timeout.
+     */
+    #rejectCommand() {
+        if (this.#pendingReject) {
+            const rejectCommand = this.#pendingReject;
+            this.#pendingReject = null;
+            rejectCommand(new Error('Disconnected'));
+        }
     }
 }

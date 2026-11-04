@@ -128,7 +128,7 @@ Creates a `BleTransport` for the given device and connects it (GATT connection, 
 Events:
 
 - `messagereceived` — fired for each complete token received on the listening characteristic. `e.detail.text` holds the token.
-- `disconnected` — fired when the device disconnects (or `disconnect()` is called).
+- `disconnected` — fired when the device disconnects.
 
 ### `class TokenAggregator extends EventTarget`
 
