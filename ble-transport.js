@@ -35,14 +35,14 @@ export class BleTransport extends EventTarget {
      *   or `tokenDelimiter` is not a single-character string.
      */
     constructor(device, tokenDelimiter = TokenAggregator.DefaultTokenDelimiter) {
-        super(); // must be first: class extends EventTarget
-
         if (!device || typeof device !== 'object' || !('gatt' in device)) {
             throw new TypeError('BluetoothDevice object expected');
         }
         if (typeof tokenDelimiter !== 'string' || tokenDelimiter.length !== 1) {
             throw new TypeError('delimiter must be a single character string');
         }
+
+        super();
 
         /** @type {BluetoothDevice} */
         this.device = device;
