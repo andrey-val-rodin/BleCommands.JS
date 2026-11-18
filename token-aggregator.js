@@ -15,10 +15,12 @@ export class TokenAggregator extends EventTarget {
      * @throws {TypeError} If `delimiter` is not a single-character string.
      */
     constructor(delimiter = TokenAggregator.DefaultTokenDelimiter) {
-        super();
         if (typeof delimiter !== 'string' || delimiter.length !== 1) {
             throw new TypeError('delimiter must be a single character string');
         }
+
+        super();
+        
         /** @type {string} */
         this.tokenDelimiter = delimiter;
     }

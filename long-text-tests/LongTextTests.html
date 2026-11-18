@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BleCommands.JS — Long Text Test</title>
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      padding: 1em;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    button {
+      font-size: 1em;
+      padding: 0.6em 1.2em;
+      margin: 0.3em 0.5em 0.3em 0;
+      cursor: pointer;
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .status {
+      margin-top: 1em;
+      font-size: 1.2em;
+      font-weight: bold;
+      min-height: 1.5em;
+    }
+
+    .ok {
+      color: black;
+    }
+
+    .failed {
+      color: red;
+    }
+
+    .log {
+      margin-top: 1em;
+      background: #f5f5f5;
+      padding: 0.8em;
+      border-radius: 4px;
+      max-height: 300px;
+      overflow-y: auto;
+      font-family: monospace;
+      font-size: 0.9em;
+      white-space: pre-wrap;
+    }
+
+    .info {
+      color: #666;
+      font-size: 0.9em;
+      margin-top: 0.5em;
+    }
+  </style>
+</head>
+
+<body>
+  <h1>BleCommands.JS — проверка длинных сообщений</h1>
+
+  <p>
+    <button id="connect">Connect</button>
+    <button id="disconnect" disabled>Disconnect</button>
+  </p>
+
+  <p>
+    <button id="sendLongText" disabled>Send long text</button>
+    <button id="receiveLargeResponse" disabled>Receive Large Response</button>
+  </p>
+
+  <div id="status" class="status"></div>
+  <div id="log" class="log"></div>
+
+  <p class="info">
+    Для работы требуется HTTPS или localhost. Откройте страницу в Chrome на Android.
+  </p>
+
+  <script type="module">
+    import { requestDevice, createTransport } from 'https://esm.sh/blecommands';
+
+    const LONG_ECHO_COMMAND = 'ECHO __10|_______20|_______30|_______40|_______50|_______60|_______70|_______80|_______90|______100|______110|______120|______130|______140|______150|______160|______170|______180|______190|______200|______210|______220|______230|______240';
+    const EXPECTED_ECHO_RESPONSE = LONG_ECHO_COMMAND;
+    const LONG_RESPONSE_COMMAND = 'LONG_RESPONSE';
+    const EXPECTED_LONG_RESPONSE = generateTestString();
+
+    let transport = null;
+
+    // ----- DOM -----
+    const connectBtn = document.getElementById('connect');
+    const disconnectBtn = document.getElementById('disconnect');
+    const sendLongTextBtn = document.getElementById('sendLongText');
+    const receiveLargeResponseBtn = document.getElementById('receiveLargeResponse');
+    const statusEl = document.getElementById('status');
+    const logEl = document.getElementById('log');
+
+    // ----- Helpers -----
+    function log(msg) {
+      const time = new Date().toLocaleTimeString();
+      logEl.textContent += `[${time}] ${msg}\n`;
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    function setStatus(text, isOk) {
+      statusEl.textContent = text;
+      statusEl.className = 'status ' + (isOk ? 'ok' : 'failed');
+    }
+
+    function clearStatus() {
+      statusEl.textContent = '';
+      statusEl.className = 'status';
+    }
+
+    function updateButtons(connected) {
+      connectBtn.disabled = connected;
+      disconnectBtn.disabled = !connected;
+      sendLongTextBtn.disabled = !connected;
+      receiveLargeResponseBtn.disabled = !connected;
+    }
+
+    /**
+     * Генерирует тестовую строку, идентичную C# GenerateTestString().
+     * Строка содержит смесь ASCII, кириллицы, китайских иероглифов и эмодзи.
+     * @param {number} sizeBytes Целевой размер в байтах UTF-8.
+     * @returns {string}
+     */
+    function generateTestString(sizeBytes = 50 * 1024) {
+      // Кодировщик нужен, чтобы отслеживать размер в байтах UTF-8,
+      // а не в символах JS (кириллица = 2 байта, иероглиф = 3, эмодзи = 4).
+      const encoder = new TextEncoder();
+
+      const cyrillicChars = [];
+      for (let j = 0; j < 32; j++) {
+        cyrillicChars.push(String.fromCharCode(0x0410 + j)); // А-Я
+      }
+
+      const chineseChars = ['中', '文', '国', '人', '民', '大', '学', '生'];
+
+      const parts = [];
+      let pos = 0;  // текущий размер в байтах UTF-8
+      let i = 0;
+      let cnt = 0;
+
+      while (pos < sizeBytes) {
+        const remainder = i % 4;
+        const count = cnt % 3;
+        cnt++;
+
+        switch (remainder) {
+          case 0: // ASCII — 1 байт
+            for (let j = 0; j <= count; j++) {
+              if (pos + 1 <= sizeBytes) {
+                parts.push(String.fromCharCode(32 + (i++ % 95)));
+                pos += 1;
+              }
+            }
+            break;
+
+          case 1: // Кириллица — 2 байта
+            for (let j = 0; j <= count; j++) {
+              if (pos + 2 <= sizeBytes) {
+                parts.push(cyrillicChars[i++ % cyrillicChars.length]);
+                pos += 2;
+              }
+            }
+            break;
+
+          case 2: // Китайский иероглиф — 3 байта
+            for (let j = 0; j <= count; j++) {
+              if (pos + 3 <= sizeBytes) {
+                parts.push(chineseChars[i++ % chineseChars.length]);
+                pos += 3;
+              }
+            }
+            break;
+
+          case 3: // Эмодзи — 4 байта
+            for (let j = 0; j <= count; j++) {
+              if (pos + 4 <= sizeBytes) {
+                parts.push('🔥');
+                pos += 4;
+                i++;
+              }
+            }
+            break;
+        }
+      }
+
+      return parts.join('');
+    }
+    // ----- Handlers -----
+    connectBtn.onclick = async () => {
+      try {
+        const device = await requestDevice('BLECommands device');
+
+        clearStatus();
+        logEl.textContent = '';
+        connectBtn.disabled = true;
+        log(`Устройство выбрано: ${device.name || device.id}`);
+
+        transport = await createTransport(device);
+        log('Транспорт создан, подключение установлено.');
+
+        transport.addEventListener('disconnected', () => {
+          log('Устройство отключено.');
+          setStatus('Disconnected', false);
+          transport = null;
+          updateButtons(false);
+        });
+
+        updateButtons(true);
+      } catch (err) {
+        log(`Ошибка подключения: ${err.message}`);
+        setStatus('Connection failed', false);
+        connectBtn.disabled = false;
+      }
+    };
+
+    disconnectBtn.onclick = () => {
+      if (transport) {
+        transport.disconnect();
+        transport = null;
+      }
+      updateButtons(false);
+      log('Отключено вручную.');
+    };
+
+    sendLongTextBtn.onclick = async () => {
+      if (!transport) return;
+      clearStatus();
+      log('Отправка длинной ECHO-команды…');
+
+      try {
+        const response = await transport.sendCommand(LONG_ECHO_COMMAND, 5000);
+
+        if (response === null) {
+          log('Таймаут: ответ не получен.');
+          setStatus('Failed (timeout)', false);
+          return;
+        }
+
+        log(`Получен ответ длиной ${response.length} символов.`);
+
+        if (response === EXPECTED_ECHO_RESPONSE) {
+          setStatus('OK', true);
+          log('Ответ совпадает с ожидаемым.');
+        } else {
+          setStatus('Failed', false);
+          log(`Несовпадение. Ожидалось ${EXPECTED_ECHO_RESPONSE.length} символов, получено ${response.length}.`);
+          // Для отладки: показать начало и конец полученной строки
+          log(`Начало: "${response.slice(0, 40)}…"`);
+          log(`Конец: "…${response.slice(-40)}"`);
+        }
+      } catch (err) {
+        log(`Ошибка: ${err.message}`);
+        setStatus('Failed', false);
+      }
+    };
+
+    receiveLargeResponseBtn.onclick = async () => {
+      if (!transport) return;
+      clearStatus();
+      log('Отправка команды LONG_RESPONSE…');
+
+      try {
+        const response = await transport.sendCommand(LONG_RESPONSE_COMMAND, 5000);
+
+        if (response === null) {
+          log('Таймаут: ответ не получен.');
+          setStatus('Failed (timeout)', false);
+          return;
+        }
+
+        log(`Получен ответ длиной ${response.length} символов.`);
+
+        if (response === EXPECTED_LONG_RESPONSE) {
+          setStatus('OK', true);
+          log('Длинный ответ совпадает с образцом.');
+        } else {
+          setStatus('Failed', false);
+          log(`Несовпадение. Ожидалось ${EXPECTED_LONG_RESPONSE.length} символов, получено ${response.length}.`);
+          log(`Начало полученного: "${response.slice(0, 60)}…"`);
+        }
+      } catch (err) {
+        log(`Ошибка: ${err.message}`);
+        setStatus('Failed', false);
+      }
+    };
+  </script>
+</body>
+
+</html>

@@ -101,12 +101,23 @@ export class BleTransport extends EventTarget {
 
     /**
      * Sends a command and waits for a response token.
+     *
+     * **Command size limit:** Web Bluetooth does not expose an API to negotiate
+     * or query the MTU, so the maximum payload of a single GATT write is
+     * determined by the browser and the OS. In practice it is 239 bytes on
+     * both Android and Windows. Commands longer than this limit cause a GATT
+     * error. The BleCommands protocol itself allows commands up to 512 bytes,
+     * but that limit is only reachable from native clients (e.g. .NET) that
+     * can explicitly request a larger MTU.
+     *
      * @param {string} command
      * @param {number} [timeoutMs=1000]
      * @returns {Promise<string|null>} The response token, or null on timeout.
      * @throws {Error} If not connected, if another command is in flight,
-     *   if the write fails, or if the device disconnects while waiting.
-     */
+     *   if the write fails (including a GATT error when `command` exceeds
+     *   the platform's maximum write size), or if the device disconnects
+     *   while waiting.
+     */    
     async sendCommand(command, timeoutMs = 1000) {
         if (!this.commandCharacteristic) {
             throw new Error('Not connected');
